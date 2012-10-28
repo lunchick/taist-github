@@ -1,21 +1,77 @@
 express = require 'express'
 pg = require('pg')
 
-conString = process.env.DATABASE_URL || "postgres://esewdxcylckkdx:k0EenLTX2J1SNEzFSu4N8FY6OS@ec2-107-22-165-35.compute-1.amazonaws.com:5432/d438m8fsbapo0j"
-console.log conString
+conString = process.env.DATABASE_URL || "postgres://postgres:letunov1988@localhost:5432/postgres"
 client = new pg.Client conString
-app = express.createServer express.logger()
+app = express.createServer()
+app.use express.bodyParser()
+client.connect()
 
-app.get '/', (request, response) ->
-	client.connect()
-	console.log "bla"
-	client.query "SELECT NOW() as when", (err, result) ->
-		console.log "bla"
-		console.log "Row count: %d", result.rows.length
-		console.log "Current year: %d", result.rows[0].when.getYear()
-	response.send 'Hello World!'
+app.get '/issue', (request, response) ->
+	repos = request.query["repos"]
+	issueId = request.query["issue"]
+	query = client.query "SELECT commentid, timespent FROM timetrack WHERE repos = $1 and issueid = $2", [repos, issueId]
+	comments = []
+	query.on 'row', (result) ->
+		comments.push result
+	query.on 'end', () ->
+		response.header 'Access-Control-Allow-Origin','*'
+		response.header 'Access-Control-Allow-Headers','X-Requested-With'
+		response.send { "comments" : comments}
 
-port = process.env.PORT || 4000;
+app.get '/report', (request, response) ->
+	repos = request.query["repos"]
+	timePeriod = request.query["timePeriod"]
+	endDate = new Date()
+	startDate = new Date()
+	if timePeriod is 'week'
+		startDate.setDate startDate.getDate()-7
+	else
+		startDate.setDate startDate.getDate()-30
+
+	query = client.query "SELECT reporter, timespent FROM timetrack WHERE repos = $1 and date between $2 and $3", [repos, startDate, endDate]
+	report = []
+	query.on 'row', (result) ->
+		report.push result
+	query.on 'end', () ->
+		result = processResult report
+		response.header 'Access-Control-Allow-Origin','*'
+		response.header 'Access-Control-Allow-Headers','X-Requested-With'
+		response.send result
+
+app.post '/addComment', (request, response) ->
+	client.query "INSERT INTO timetrack(repos, issueid, commentid, date, timespent, reporter) values($1, $2, $3, $4, $5, $6)",
+		[request.body.repos, request.body.issueId, request.body.commentId, request.body.date, request.body.timeSpent,request.body.reporter]
+	response.header 'Access-Control-Allow-Origin','*'
+	response.header 'Access-Control-Allow-Headers','X-Requested-With'
+	response.send "OK"
+
+port = process.env.PORT || 4000
 
 app.listen port, () ->
 	console.log "Listening on " + port
+
+processResult = (report) ->
+	result = {}
+	total = 0;
+	for entry in report
+		reporter = entry.reporter
+		time = entry.timespent
+		total += convertStringToTime time
+		if (result[reporter])
+			result[reporter] = result[reporter] + convertStringToTime time
+		else
+			result[reporter] = convertStringToTime time
+	reporters = Object.keys result
+	reportersList = []
+	for item in reporters
+		reportersList.push {"reporter" : item, "timeSpent" : convertTimeToString result[item]}
+
+	{'reporters' : reportersList , "total" : convertTimeToString total}
+
+convertStringToTime = (timeString) ->
+	array = timeString.split ':'
+	parseInt(array[0]) * 60 + parseInt(array[1])
+
+convertTimeToString = (time) ->
+	"" +  Math.floor(time/60) + ":" + time%60
