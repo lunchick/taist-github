@@ -46,6 +46,13 @@ app.post '/addComment', (request, response) ->
 	response.header 'Access-Control-Allow-Headers','X-Requested-With'
 	response.send "OK"
 
+app.post '/editComment', (request, response) ->
+	client.query "UPDATE timetrack SET timespent=$1 WHERE repos = $2 and issueid = $3 and commentid = $4",
+		[request.body.timeSpent, request.body.repos, request.body.issueId, request.body.commentId]
+	response.header 'Access-Control-Allow-Origin','*'
+	response.header 'Access-Control-Allow-Headers','X-Requested-With'
+	response.send "OK"
+
 port = process.env.PORT || 4000
 
 app.listen port, () ->
