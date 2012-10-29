@@ -81,4 +81,4 @@ convertStringToTime = (timeString) ->
 	parseInt(array[0]) * 60 + parseInt(array[1])
 
 convertTimeToString = (time) ->
-	"" +  Math.floor(time/60) + ":" + time%60
+	"" +  Math.floor(time/60) + ":" + if time%60 > 9 then time%60 else "0" + time%60
