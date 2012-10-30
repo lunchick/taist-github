@@ -53,6 +53,34 @@ app.post '/editComment', (request, response) ->
 	response.header 'Access-Control-Allow-Headers','X-Requested-With'
 	response.send "OK"
 
+app.post '/changePluginStatus', (request, response) ->
+	repos = request.body.repos
+	enable = request.body.enable
+	query = client.query "SELECT enable FROM plugin_status WHERE repos = $1", [repos]
+	isCreated = false;
+	query.on 'row', (result) ->
+		isCreated = true
+		if result.enable isnt enable
+			client.query "UPDATE plugin_status SET enable=$1 WHERE repos = $2", [enable, repos]
+	query.on 'end', () ->
+		if isCreated is false
+			client.query "INSERT INTO plugin_status(repos, enable) values($1, $2)",	[repos, enable]
+	response.header 'Access-Control-Allow-Origin','*'
+	response.header 'Access-Control-Allow-Headers','X-Requested-With'
+	response.send "OK"
+
+app.get '/pluginStatus', (request, response) ->
+	repos = request.query["repos"]
+	enable = request.query["enable"]
+	result = false;
+	query = client.query "SELECT enable FROM plugin_status WHERE repos = $1", [repos]
+	query.on 'row', (row) ->
+		result = row.enable;
+	query.on 'end', () ->
+		response.header 'Access-Control-Allow-Origin','*'
+		response.header 'Access-Control-Allow-Headers','X-Requested-With'
+		response.send { status: result }
+
 port = process.env.PORT || 4000
 
 app.listen port, () ->
